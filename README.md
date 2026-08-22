@@ -7,14 +7,14 @@
 ## 工作原理
 
 ```
-外部系统 (Auto_MAS / GitHub / 监控 / ...)
+外部系统 (AUTO-MAS / GitHub / 监控 / ...)
   │  POST /webhook/<route_id>
-  │  Header: userId = "user1"
+  │  Headers: channel + userId [+ account]
   ▼
-Webhook Server (WSL/Linux)
-  │  1. 查路由模板 → 格式化消息
-  │  2. 查 userId → WeChat/Telegram target
-  │  3. 调用 openclaw message send
+Webhook Server (Flask, 127.0.0.1:9876)
+  │  1. channel → 查 config 取 account（或用 header 传入的）
+  │  2. userId → 作为 target
+  │  3. subprocess: openclaw message send
   ▼
 OpenClaw Channel → 联系人
 ```
@@ -39,13 +39,17 @@ cp config.example.json config.json
 
 ```json
 {
-  "host": "0.0.0.0",
+  "host": "127.0.0.1",
   "port": 9876,
-  "users": {
-    "user1": {
-      "channel": "openclaw-weixin",
-      "account": "your-bot-account-id",
-      "target": "target-user-id@im.wechat"
+  "mode": "loose",
+  "channels": {
+    "openclaw-weixin": {
+      "account": "your-weixin-bot-account-id",
+      "users": ["your-wechat-user-id@im.wechat"]
+    },
+    "telegram": {
+      "account": "default",
+      "users": ["your-telegram-chat-id"]
     }
   },
   "routes": {
@@ -65,16 +69,34 @@ python webhook_server.py
 
 ### 4. 配置 Webhook 来源
 
-在外部系统中设置 webhook URL：
+在外部系统中设置 webhook URL 和 headers：
 
 - **URL**: `http://<WSL_IP>:9876/webhook/<route_id>`
 - **Method**: POST
-- **Headers**: `Content-Type: application/json`, `userId: <对应 user key>`
+- **Headers**: `Content-Type: application/json`, `channel: <渠道名>`, `userId: <用户ID>`
 
 WSL2 IP：
 ```bash
 ip route show default | awk '/default/ {print $3}'
 ```
+
+## Header 参数
+
+| Header | 必传 | 说明 | 示例 |
+|--------|------|------|------|
+| `channel` | ✅ | OpenClaw 渠道名 | `openclaw-weixin`、`telegram` |
+| `userId` | ✅ | 目标用户 ID（同时作为 target） | `user@im.wechat`、`123456789` |
+| `account` | ❌ | 机器人账号（不传则从 config channels 取） | `your-bot-id` |
+
+## 两种模式
+
+### Loose（默认）
+
+`channel` + `userId` 必传，任意 userId 都允许发送。
+
+### Strict
+
+`channel` + `userId` 必传，且 userId 必须在 `channels.<channel>.users` 列表中。不匹配返回 403。
 
 ## API
 
@@ -83,7 +105,9 @@ ip route show default | awk '/default/ {print $3}'
 根据 route_id 匹配路由配置，应用消息模板后转发。
 
 **请求头：**
-- `userId` (必填): 用户标识
+- `channel` (必填): OpenClaw 渠道名
+- `userId` (必填): 目标用户 ID
+- `account` (可选): 机器人账号
 
 **请求体 (JSON)：**
 ```json
@@ -101,7 +125,7 @@ ip route show default | awk '/default/ {print $3}'
 ### GET `/health` — 健康检查
 
 ```json
-{"status": "ok", "users": ["user1"], "routes": ["arknights", "github"]}
+{"status": "ok", "mode": "loose", "channels": ["openclaw-weixin", "telegram"], "routes": ["arknights"]}
 ```
 
 ## 路由模板
@@ -116,14 +140,6 @@ ip route show default | awk '/default/ {print $3}'
 ```
 
 请求体 `{"message": "理智耗尽", "account": "主号"}` → 最终消息：`🎮 理智耗尽 (账号: 主号)`
-
-## 内置快捷路由
-
-| 路径 | 说明 |
-|------|------|
-| `/webhook/arknights` | → `routes.arknights` |
-| `/webhook/github` | → `routes.github` |
-| `/webhook/generic` | 直通，无模板 |
 
 ## 部署
 
@@ -145,13 +161,14 @@ sudo systemctl enable --now openclaw-webhook-channel
 
 ## 使用示例
 
-### Auto_MAS 明日方舟
+### AUTO-MAS 明日方舟
 
 ```bash
 curl -X POST http://localhost:9876/webhook/arknights \
   -H "Content-Type: application/json" \
-  -H "userId: user1" \
-  -d '{"message": "理智已耗尽，自动刷图完成", "account": "主号"}'
+  -H "channel: openclaw-weixin" \
+  -H "userId: your-wechat-user-id@im.wechat" \
+  -d '{"message": "理智已耗尽，自动刷图完成"}'
 ```
 
 ### GitHub Actions
@@ -159,7 +176,8 @@ curl -X POST http://localhost:9876/webhook/arknights \
 ```bash
 curl -X POST http://localhost:9876/webhook/github \
   -H "Content-Type: application/json" \
-  -H "userId: user1" \
+  -H "channel: telegram" \
+  -H "userId: 123456789" \
   -d '{"message": "Build #123 成功", "extra": {"repo": "my-project", "branch": "main"}}'
 ```
 
@@ -168,7 +186,8 @@ curl -X POST http://localhost:9876/webhook/github \
 ```bash
 curl -X POST http://localhost:9876/webhook/monitor \
   -H "Content-Type: application/json" \
-  -H "userId: user1" \
+  -H "channel: telegram" \
+  -H "userId: 123456789" \
   -d '{"message": "CPU 使用率超过 90%", "level": "warn"}'
 ```
 

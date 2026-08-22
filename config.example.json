@@ -1,36 +1,25 @@
 {
-  "host": "0.0.0.0",
+  "host": "127.0.0.1",
   "port": 9876,
-  "debug": false,
-  "users": {
-    "user1": {
-      "channel": "telegram",
-      "account": "default",
-      "target": "@your_telegram_username",
-      "_comment": "Telegram 用户"
+  "mode": "loose",
+  "channels": {
+    "openclaw-weixin": {
+      "account": "your-weixin-bot-account-id",
+      "users": ["your-wechat-user-id@im.wechat"]
     },
-    "user2": {
-      "channel": "openclaw-weixin",
-      "account": "your-bot-account-id",
-      "target": "wxid_xxxxxxxxxxxx@im.wechat",
-      "_comment": "微信用户"
+    "telegram": {
+      "account": "default",
+      "users": ["your-telegram-chat-id"]
     }
   },
   "routes": {
+    "generic": {
+      "template": "{{message}}",
+      "defaultLevel": "info"
+    },
     "arknights": {
       "template": "🎮 {{message}}",
-      "defaultLevel": "info",
-      "_comment": "明日方舟 Auto_MAS"
-    },
-    "github": {
-      "template": "📦 GitHub: {{message}}",
-      "defaultLevel": "info",
-      "_comment": "GitHub Actions / CI"
-    },
-    "monitor": {
-      "template": "🔔 监控: {{message}}",
-      "defaultLevel": "warn",
-      "_comment": "服务监控告警"
+      "defaultLevel": "info"
     }
   }
 }
