@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenClaw Webhook Channel
+After=network.target openclaw-gateway.service
+
+[Service]
+Type=simple
+User=heixiu
+WorkingDirectory=/mnt/e/repos/openclaw-webhook-channel
+ExecStart=/usr/bin/python3 webhook_server.py -c config.json
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

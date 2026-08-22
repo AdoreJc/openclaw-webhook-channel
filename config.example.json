@@ -1,0 +1,36 @@
+{
+  "host": "0.0.0.0",
+  "port": 9876,
+  "debug": false,
+  "users": {
+    "user1": {
+      "channel": "telegram",
+      "account": "default",
+      "target": "@your_telegram_username",
+      "_comment": "Telegram 用户"
+    },
+    "user2": {
+      "channel": "openclaw-weixin",
+      "account": "your-bot-account-id",
+      "target": "wxid_xxxxxxxxxxxx@im.wechat",
+      "_comment": "微信用户"
+    }
+  },
+  "routes": {
+    "arknights": {
+      "template": "🎮 {{message}}",
+      "defaultLevel": "info",
+      "_comment": "明日方舟 Auto_MAS"
+    },
+    "github": {
+      "template": "📦 GitHub: {{message}}",
+      "defaultLevel": "info",
+      "_comment": "GitHub Actions / CI"
+    },
+    "monitor": {
+      "template": "🔔 监控: {{message}}",
+      "defaultLevel": "warn",
+      "_comment": "服务监控告警"
+    }
+  }
+}
