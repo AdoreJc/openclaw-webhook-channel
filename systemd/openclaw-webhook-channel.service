@@ -6,7 +6,8 @@ After=network.target openclaw-gateway.service
 Type=simple
 User=heixiu
 WorkingDirectory=/mnt/e/repos/openclaw-webhook-channel
-ExecStart=/usr/bin/python3 webhook_server.py -c config.json
+ExecStart=/mnt/e/repos/openclaw-webhook-channel/.venv/bin/python webhook_server.py -c config.json
+Environment=PATH=/home/heixiu/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 Restart=on-failure
 RestartSec=5
 

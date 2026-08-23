@@ -130,6 +130,26 @@ cd /mnt/e/repos/openclaw-webhook-channel
 .venv/bin/python webhook_server.py
 ```
 
+### systemd 自启动
+
+项目提供 `systemd/openclaw-webhook-channel.service`（user service，无需 sudo）：
+
+```bash
+# 首次部署
+loginctl enable-linger $(whoami)
+mkdir -p ~/.config/systemd/user
+cp systemd/openclaw-webhook-channel.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now openclaw-webhook-channel
+
+# 日常管理
+systemctl --user status openclaw-webhook-channel
+systemctl --user restart openclaw-webhook-channel
+journalctl --user -u openclaw-webhook-channel -f
+```
+
+> Linger=yes 确保 WSL 重启后服务自动拉起，无需手动登录。
+
 ## 常见问题
 
 **HTTP 400: Missing required header: channel**

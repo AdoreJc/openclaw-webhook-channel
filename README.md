@@ -143,13 +143,28 @@ ip route show default | awk '/default/ {print $3}'
 
 ## 部署
 
-### systemd 服务
+### systemd 用户服务（推荐）
+
+使用 `systemd --user`，无需 sudo，开机自启：
 
 ```bash
-sudo cp systemd/openclaw-webhook-channel.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now openclaw-webhook-channel
+# 1. 启用 linger（WSL 重启后不需要登录也能自启服务）
+loginctl enable-linger $(whoami)
+
+# 2. 复制 service 文件到用户 systemd 目录
+mkdir -p ~/.config/systemd/user
+cp systemd/openclaw-webhook-channel.service ~/.config/systemd/user/
+
+# 3. 重载并启动
+systemctl --user daemon-reload
+systemctl --user enable --now openclaw-webhook-channel
+
+# 4. 查看状态 / 日志
+systemctl --user status openclaw-webhook-channel
+journalctl --user -u openclaw-webhook-channel -f
 ```
+
+> ⚠️ 确保 `openclaw` CLI 在 PATH 中（service 文件已配置 `Environment=PATH`，若安装路径不同需调整）。
 
 ### 环境变量
 
