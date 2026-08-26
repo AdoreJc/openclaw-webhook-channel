@@ -1,41 +1,43 @@
 # OpenClaw Webhook Channel
 
-通用 Webhook → OpenClaw 消息转发器。接收外部系统的 webhook 通知，自动路由到对应的聊天联系人。
+> **English** | [简体中文](README.zh-CN.md)
 
-**纯自动化转发，不经过 LLM 处理。** 支持任意 webhook 来源：游戏自动化、GitHub Actions、CI/CD、监控告警等。
+A lightweight webhook-to-chat relay for [OpenClaw](https://github.com/openclaw/openclaw). Receives HTTP webhooks from external systems and forwards messages to OpenClaw chat channels (WeChat, Telegram, etc.) via `openclaw message send`.
 
-## 工作原理
+**Pure message forwarding — no LLM processing.** Supports any webhook source: game automation, GitHub Actions, CI/CD, monitoring alerts, and more.
+
+## How It Works
 
 ```
-外部系统 (AUTO-MAS / GitHub / 监控 / ...)
+External System (GitHub / Monitoring / Game Bot / ...)
   │  POST /webhook/<route_id>
   │  Headers: channel + userId [+ account]
   ▼
 Webhook Server (Flask, 127.0.0.1:9876)
-  │  1. channel → 查 config 取 account（或用 header 传入的）
-  │  2. userId → 作为 target
+  │  1. channel → resolve bot account from config (or use header)
+  │  2. userId → used as target
   │  3. subprocess: openclaw message send
   ▼
-OpenClaw Channel → 联系人
+OpenClaw Channel → Contact
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-确保 `openclaw` CLI 已安装且配置了目标通道。
+Make sure `openclaw` CLI is installed and the target channel is configured.
 
-### 2. 配置
+### 2. Configure
 
 ```bash
 cp config.example.json config.json
 ```
 
-编辑 `config.json`：
+Edit `config.json`:
 
 ```json
 {
@@ -61,129 +63,129 @@ cp config.example.json config.json
 }
 ```
 
-### 3. 启动
+### 3. Run
 
 ```bash
 python webhook_server.py
 ```
 
-### 4. 配置 Webhook 来源
+### 4. Configure Webhook Sources
 
-在外部系统中设置 webhook URL 和 headers：
+Set up webhook URL and headers in your external system:
 
-- **URL**: `http://<WSL_IP>:9876/webhook/<route_id>`
+- **URL**: `http://<host>:9876/webhook/<route_id>`
 - **Method**: POST
-- **Headers**: `Content-Type: application/json`, `channel: <渠道名>`, `userId: <用户ID>`
+- **Headers**: `Content-Type: application/json`, `channel: <channel-name>`, `userId: <user-id>`
 
-WSL2 IP：
+For WSL2, use the gateway IP:
 ```bash
 ip route show default | awk '/default/ {print $3}'
 ```
 
-## Header 参数
+## Header Parameters
 
-| Header | 必传 | 说明 | 示例 |
-|--------|------|------|------|
-| `channel` | ✅ | OpenClaw 渠道名 | `openclaw-weixin`、`telegram` |
-| `userId` | ✅ | 目标用户 ID（同时作为 target） | `user@im.wechat`、`123456789` |
-| `account` | ❌ | 机器人账号（不传则从 config channels 取） | `your-bot-id` |
+| Header | Required | Description | Example |
+|--------|----------|-------------|---------|
+| `channel` | ✅ | OpenClaw channel name | `openclaw-weixin`, `telegram` |
+| `userId` | ✅ | Target user ID (also used as the message target) | `user@im.wechat`, `123456789` |
+| `account` | ❌ | Bot account override (falls back to config) | `your-bot-id` |
 
-## 两种模式
+## Two Modes
 
-### Loose（默认）
+### Loose (default)
 
-`channel` + `userId` 必传，任意 userId 都允许发送。
+`channel` + `userId` required. Any userId is allowed to receive messages.
 
 ### Strict
 
-`channel` + `userId` 必传，且 userId 必须在 `channels.<channel>.users` 列表中。不匹配返回 403。
+`channel` + `userId` required. The userId must appear in `channels.<channel>.users` list. Returns 403 if not matched.
 
 ## API
 
-### POST `/webhook/<route_id>` — 通用路由端点
+### POST `/webhook/<route_id>` — Templated Endpoint
 
-根据 route_id 匹配路由配置，应用消息模板后转发。
+Matches the route config by `route_id`, applies the message template, then forwards.
 
-**请求头：**
-- `channel` (必填): OpenClaw 渠道名
-- `userId` (必填): 目标用户 ID
-- `account` (可选): 机器人账号
+**Headers:**
+- `channel` (required): OpenClaw channel name
+- `userId` (required): Target user ID
+- `account` (optional): Bot account override
 
-**请求体 (JSON)：**
+**Body (JSON):**
 ```json
 {
-  "message": "通知内容",
+  "message": "notification content",
   "level": "info",
   "extra": { "key": "value" }
 }
 ```
 
-### POST `/webhook/generic` — 直通端点
+### POST `/webhook/generic` — Pass-through Endpoint
 
-无模板，直接转发 message。
+No template — forwards the raw `message` field directly.
 
-### GET `/health` — 健康检查
+### GET `/health` — Health Check
 
 ```json
 {"status": "ok", "mode": "loose", "channels": ["openclaw-weixin", "telegram"], "routes": ["arknights"]}
 ```
 
-## 路由模板
+## Route Templates
 
-模板中 `{{message}}` 会被替换为实际消息，其他字段同理：
+`{{message}}` in the template is replaced with the actual message. Other fields from the request body work the same way:
 
 ```json
 {
-  "template": "🎮 {{message}} (账号: {{account}})",
+  "template": "🎮 {{message}} (account: {{account}})",
   "defaultLevel": "info"
 }
 ```
 
-请求体 `{"message": "理智耗尽", "account": "主号"}` → 最终消息：`🎮 理智耗尽 (账号: 主号)`
+Request body `{"message": "Out of sanity", "account": "Main"}` → Final message: `🎮 Out of sanity (account: Main)`
 
-## 部署
+## Deployment
 
-### systemd 用户服务（推荐）
+### systemd User Service (Recommended)
 
-使用 `systemd --user`，无需 sudo，开机自启：
+Uses `systemd --user` — no sudo required, auto-starts on boot:
 
 ```bash
-# 1. 启用 linger（WSL 重启后不需要登录也能自启服务）
+# 1. Enable linger (service stays alive after logout in WSL)
 loginctl enable-linger $(whoami)
 
-# 2. 复制 service 文件到用户 systemd 目录
+# 2. Copy service file
 mkdir -p ~/.config/systemd/user
 cp systemd/openclaw-webhook-channel.service ~/.config/systemd/user/
 
-# 3. 重载并启动
+# 3. Reload and start
 systemctl --user daemon-reload
 systemctl --user enable --now openclaw-webhook-channel
 
-# 4. 查看状态 / 日志
+# 4. Check status / logs
 systemctl --user status openclaw-webhook-channel
 journalctl --user -u openclaw-webhook-channel -f
 ```
 
-> ⚠️ 确保 `openclaw` CLI 在 PATH 中（service 文件已配置 `Environment=PATH`，若安装路径不同需调整）。
+> ⚠️ Make sure `openclaw` CLI is in PATH (the service file sets `Environment=PATH` — adjust if your install path differs).
 
-### 环境变量
+### Environment Variables
 
-| 变量 | 说明 |
-|------|------|
-| `OPENCLAW_WEBHOOK_CONFIG` | 配置文件路径 |
-| `OPENCLAW_WEBHOOK_PORT` | 监听端口 |
-| `OPENCLAW_WEBHOOK_HOST` | 监听地址 |
+| Variable | Description |
+|----------|-------------|
+| `OPENCLAW_WEBHOOK_CONFIG` | Config file path |
+| `OPENCLAW_WEBHOOK_PORT` | Listen port |
+| `OPENCLAW_WEBHOOK_HOST` | Listen address |
 
-## 使用示例
+## Usage Examples
 
-### AUTO-MAS 明日方舟
+### Game Automation (AUTO-MAS)
 
 ```bash
 curl -X POST http://localhost:9876/webhook/arknights \
   -H "Content-Type: application/json" \
   -H "channel: openclaw-weixin" \
   -H "userId: your-wechat-user-id@im.wechat" \
-  -d '{"message": "理智已耗尽，自动刷图完成"}'
+  -d '{"message": "Out of sanity, auto-farming complete"}'
 ```
 
 ### GitHub Actions
@@ -193,17 +195,17 @@ curl -X POST http://localhost:9876/webhook/github \
   -H "Content-Type: application/json" \
   -H "channel: telegram" \
   -H "userId: 123456789" \
-  -d '{"message": "Build #123 成功", "extra": {"repo": "my-project", "branch": "main"}}'
+  -d '{"message": "Build #123 succeeded", "extra": {"repo": "my-project", "branch": "main"}}'
 ```
 
-### 监控告警
+### Monitoring Alerts
 
 ```bash
 curl -X POST http://localhost:9876/webhook/monitor \
   -H "Content-Type: application/json" \
   -H "channel: telegram" \
   -H "userId: 123456789" \
-  -d '{"message": "CPU 使用率超过 90%", "level": "warn"}'
+  -d '{"message": "CPU usage above 90%", "level": "warn"}'
 ```
 
 ## License

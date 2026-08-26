@@ -5,48 +5,48 @@ description: Configure and manage the OpenClaw Webhook Channel server — a ligh
 
 # OpenClaw Webhook Channel
 
-通用 Webhook → OpenClaw 消息转发器。接收外部系统的 webhook 通知，转发到 OpenClaw 聊天渠道。
+A lightweight webhook-to-chat relay for OpenClaw. Receives HTTP webhooks from external systems and forwards messages to OpenClaw chat channels.
 
-**必传 header：`channel` + `userId`**
-**可选 header：`account`**（指定机器人账号，不传则从 config 取默认值）
+**Required headers: `channel` + `userId`**
+**Optional header: `account`** (bot account override; falls back to config default)
 
-## 项目位置
+## Project Paths
 
-- 配置：`config.json`
-- Python venv：`.venv/`
+- Config: `config.json`
+- Python venv: `.venv/`
 
-## 架构
+## Architecture
 
 ```
-外部系统 (AUTO-MAS / GitHub / 监控 / ...)
+External System (GitHub / Monitoring / Game Bot / ...)
   │  POST /webhook/<route_id>
   │  Headers: channel + userId [+ account]
   ▼
 Webhook Server (Flask, 127.0.0.1:9876)
-  │  1. channel → 查 config 取 account（或用 header 传入的）
-  │  2. userId → 作为 target
+  │  1. channel → resolve bot account from config (or use header)
+  │  2. userId → used as target
   │  3. subprocess: openclaw message send
   ▼
-OpenClaw Channel → 联系人
+OpenClaw Channel → Contact
 ```
 
-## Header 参数
+## Header Parameters
 
-| Header | 必传 | 说明 | 示例 |
-|--------|------|------|------|
-| `channel` | ✅ | OpenClaw 渠道名 | `openclaw-weixin`、`telegram` |
-| `userId` | ✅ | 目标用户 ID（同时作为 target） | `user@im.wechat`、`123456789` |
-| `account` | ❌ | 机器人账号（不传则从 config channels 取） | `your-bot-id` |
+| Header | Required | Description | Example |
+|--------|----------|-------------|---------|
+| `channel` | ✅ | OpenClaw channel name | `openclaw-weixin`, `telegram` |
+| `userId` | ✅ | Target user ID (also used as the message target) | `user@im.wechat`, `123456789` |
+| `account` | ❌ | Bot account override (falls back to config) | `your-bot-id` |
 
-## 两种模式
+## Two Modes
 
-### Loose（默认）
+### Loose (default)
 
-`channel` + `userId` 必传，任意 userId 都允许发送。`account` 从 config channels 取默认值。
+`channel` + `userId` required. Any userId is allowed to receive messages. `account` falls back to the config default for the channel.
 
 ### Strict
 
-`channel` + `userId` 必传，且 userId 必须在 `channels.<channel>.users` 列表中匹配到才发送。不匹配返回 403。
+`channel` + `userId` required. The userId must appear in `channels.<channel>.users` list. Returns 403 if not matched.
 
 ```json
 {
@@ -60,7 +60,7 @@ OpenClaw Channel → 联系人
 }
 ```
 
-## config.json 结构
+## config.json Structure
 
 ```json
 {
@@ -86,83 +86,83 @@ OpenClaw Channel → 联系人
 }
 ```
 
-### channels 配置
+### channels Config
 
-| 字段 | 必填 | 说明 |
-|------|------|------|
-| `account` | ✅ | 该渠道发送时使用的 bot 账号（默认值，可被 header 覆盖） |
-| `users` | ❌ | strict 模式下允许的 userId 列表 |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `account` | ✅ | Bot account used for this channel (default; can be overridden by header) |
+| `users` | ❌ | Allowed userId list in strict mode |
 
-### routes 配置
+### routes Config
 
-路由定义消息模板，`{{message}}` 必填，其他字段从请求体取。
+Routes define message templates. `{{message}}` is required; other fields are taken from the request body.
 
-## API 端点
+## API Endpoints
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/webhook/<route_id>` | 按路由模板转发 |
-| POST | `/webhook/generic` | 直通，无模板 |
-| GET | `/health` | 健康检查 |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/webhook/<route_id>` | Templated forwarding by route |
+| POST | `/webhook/generic` | Pass-through, no template |
+| GET | `/health` | Health check |
 
-## 集成示例：AUTO-MAS
+## Integration Example: AUTO-MAS
 
-**URL：** `http://<WSL网关IP>:9876/webhook/arknights`
+**URL:** `http://<host>:9876/webhook/arknights`
 
-**Headers：**
+**Headers:**
 | Key | Value |
 |-----|-------|
 | Content-Type | application/json |
-| channel | openclaw-weixin（或 telegram） |
-| userId | 你的用户 ID |
+| channel | openclaw-weixin (or telegram) |
+| userId | your user ID |
 
-**Body：**
+**Body:**
 ```json
 {"message": "{title}: {content}", "timestamp": "{datetime}"}
 ```
 
-WSL 网关 IP：`ip route show default | awk '/default/ {print $3}'`
+WSL gateway IP: `ip route show default | awk '/default/ {print $3}'`
 
-## 启动与管理
+## Running & Managing
 
 ```bash
 cd /mnt/e/repos/openclaw-webhook-channel
 .venv/bin/python webhook_server.py
 ```
 
-### systemd 自启动
+### systemd Auto-start
 
-项目提供 `systemd/openclaw-webhook-channel.service`（user service，无需 sudo）：
+The project ships with `systemd/openclaw-webhook-channel.service` (user service, no sudo needed):
 
 ```bash
-# 首次部署
+# First-time setup
 loginctl enable-linger $(whoami)
 mkdir -p ~/.config/systemd/user
 cp systemd/openclaw-webhook-channel.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now openclaw-webhook-channel
 
-# 日常管理
+# Day-to-day
 systemctl --user status openclaw-webhook-channel
 systemctl --user restart openclaw-webhook-channel
 journalctl --user -u openclaw-webhook-channel -f
 ```
 
-> Linger=yes 确保 WSL 重启后服务自动拉起，无需手动登录。
+> Linger=yes ensures the service survives WSL restarts without requiring a manual login.
 
-## 常见问题
+## Troubleshooting
 
 **HTTP 400: Missing required header: channel**
-必传 header `channel` 缺失。
+The `channel` header is missing from the request.
 
 **HTTP 400: Missing required header: userId**
-必传 header `userId` 缺失。
+The `userId` header is missing from the request.
 
 **HTTP 400: Unknown channel: xxx**
-config.json 的 `channels` 中没有对应渠道配置。
+The channel is not defined in `config.json` → `channels`.
 
 **HTTP 403: userId not allowed**
-strict 模式下 userId 不在 `channels.<channel>.users` 列表中。
+In strict mode, the userId is not in the `channels.<channel>.users` list.
 
 **HTTP 500: Failed to send via OpenClaw**
-`openclaw message send` 失败，检查渠道状态：`openclaw channels status`
+`openclaw message send` failed. Check channel status: `openclaw channels status`
